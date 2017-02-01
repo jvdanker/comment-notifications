@@ -13,29 +13,22 @@ class CommentNotifier extends Extension {
 	 * @param Comment $comment
 	 */
 	public function onAfterPostComment(Comment $comment) {
-		$parent = $comment->getParent();
-		if(!$parent) return;
-		
+        $blogPost = $comment->getParent();
+		if(!$blogPost || !$blogPost->Parent()) return;
+
         // assumption 1; ParentID is the same SiteTree object of the Blog Post page since this component (Comments)
         // is currently only used on the Blog Post page itself. Retrieving the Blog Moderator is therefor rather easy
         // and doesn't need to use the 'updateNotificationRecipients' extension points for now.
         // assumption 2; a BlogPost is a child of a Blog
-        $blogPost = $parent;
 		$blog = $blogPost->Parent();
 
         // send a notification to the blog moderators
         foreach ($blog->Moderators() as $moderator) {
-            $subject = $parent->notificationSubject($comment, $moderator);
-            $sender = $parent->notificationSender($comment, $moderator);
-            $template = $parent->notificationTemplate($comment, $moderator);
-            $this->notifyRecipient($comment, $parent, $moderator, $subject, $sender, $template);
+            $this->notifyRecipient($comment, $blogPost, $moderator);
         }
 
 		// send a notification to the comment's author
-        $subject = $parent->notificationSubject($comment, $comment->Email);
-        $sender = $parent->notificationSender($comment, $comment->Email);
-        $template = $parent->notificationTemplate($comment, $comment->Email);
-        $this->notifyRecipient($comment, $parent, $comment->Email, $subject, $sender, $template);
+        $this->notifyRecipient($comment, $blogPost, $comment->Email);
 
         die();
 	}
@@ -61,6 +54,21 @@ class CommentNotifier extends Extension {
 		return preg_match('/' . $pregSafePattern . '/i', $email);
 	}
 
+    /**
+     * Send comment notification to a given recipient
+     *
+     * @param Comment $comment
+     * @param DataObject $blogPost Object with the {@see CommentNotifiable} extension applied
+     * @param Member|string $recipient Either a member object or an email address to which notifications should be sent
+     * @return bool status of the email being send
+     */
+    private function notifyRecipient($comment, $blogPost, $recipient) {
+        $subject = $blogPost->notificationSubject($comment, $recipient);
+        $sender = $blogPost->notificationSender($comment, $recipient);
+        $template = $blogPost->notificationTemplate($comment, $recipient);
+        $this->notifyRecipient($comment, $blogPost, $recipient, $subject, $sender, $template);
+    }
+
 	/**
 	 * Send comment notification to a given recipient
 	 *
@@ -72,7 +80,7 @@ class CommentNotifier extends Extension {
      * @param string $template the content of the email message
      * @return bool status of the email being send
 	 */
-	private function notifyRecipient($comment, $parent, $recipient, $subject, $sender, $template) {
+	private function sendEmail($comment, $parent, $recipient, $subject, $sender, $template) {
 
 		// Validate email
 		// Important in case of the owner being a default-admin or a username with no contact email
